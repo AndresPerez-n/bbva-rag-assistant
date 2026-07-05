@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>BBVA RAG Assistant</title>
+  <style>
+    :root { --bg:#0b1220; --panel:#111a2b; --muted:#8aa0c0; --line:#22314d;
+            --accent:#0a8ee6; --user:#1c4e80; --bot:#16233b; --text:#e7eefc; }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+           background: var(--bg); color: var(--text); height:100vh; display:flex; flex-direction:column; }
+    header { padding:14px 18px; border-bottom:1px solid var(--line); display:flex;
+             align-items:center; gap:12px; background:var(--panel); }
+    header h1 { font-size:15px; margin:0; font-weight:600; letter-spacing:.2px; }
+    header .meta { font-size:12px; color:var(--muted); margin-left:auto; }
+    header input { background:var(--bg); border:1px solid var(--line); color:var(--text);
+                   border-radius:6px; padding:5px 8px; font-size:12px; width:150px; }
+    #chat { flex:1; overflow-y:auto; padding:18px; display:flex; flex-direction:column; gap:14px; }
+    .msg { max-width:760px; padding:12px 14px; border-radius:10px; line-height:1.5; white-space:pre-wrap; }
+    .user { align-self:flex-end; background:var(--user); }
+    .bot { align-self:flex-start; background:var(--bot); border:1px solid var(--line); }
+    .sources { margin-top:8px; font-size:12px; color:var(--muted); }
+    .sources a { color:#7fc2f5; text-decoration:none; }
+    .badge { display:inline-block; font-size:11px; padding:1px 7px; border-radius:20px;
+             margin-left:6px; border:1px solid var(--line); }
+    .b-high{color:#65e2a0;} .b-medium{color:#e6c34a;} .b-low{color:#e6884a;} .b-out{color:#e0607a;}
+    .fb { margin-top:8px; display:flex; gap:8px; }
+    .fb button { background:transparent; border:1px solid var(--line); color:var(--muted);
+                 border-radius:6px; cursor:pointer; padding:2px 9px; font-size:13px; }
+    .fb button:hover { color:var(--text); border-color:var(--accent); }
+    footer { padding:14px 18px; border-top:1px solid var(--line); background:var(--panel);
+             display:flex; gap:10px; }
+    #q { flex:1; background:var(--bg); border:1px solid var(--line); color:var(--text);
+         border-radius:8px; padding:11px 12px; font-size:14px; resize:none; }
+    #send { background:var(--accent); color:#fff; border:none; border-radius:8px;
+            padding:0 20px; font-size:14px; cursor:pointer; }
+    #send:disabled { opacity:.5; cursor:default; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>BBVA RAG Assistant</h1>
+    <span class="meta">
+      sesión: <input id="session" value="web-demo" />
+    </span>
+  </header>
+
+  <div id="chat">
+    <div class="msg bot">Hola. Puedo responder preguntas sobre el contenido del sitio del banco.
+¿En qué te ayudo?</div>
+  </div>
+
+  <footer>
+    <textarea id="q" rows="1" placeholder="Escribe tu pregunta y pulsa Enter..."></textarea>
+    <button id="send">Enviar</button>
+  </footer>
+
+  <script>
+    const chat = document.getElementById('chat');
+    const q = document.getElementById('q');
+    const send = document.getElementById('send');
+    const sessionEl = document.getElementById('session');
+
+    function el(cls, html) {
+      const d = document.createElement('div');
+      d.className = cls;
+      if (html !== undefined) d.innerHTML = html;
+      chat.appendChild(d);
+      chat.scrollTop = chat.scrollHeight;
+      return d;
+    }
+    function esc(s){ return s.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
+
+    async function ask() {
+      const text = q.value.trim();
+      if (!text) return;
+      q.value = '';
+      send.disabled = true;
+      el('msg user', esc(text));
+
+      const bot = el('msg bot', '');
+      let answer = '';
+      let meta = null;
+
+      try {
+        const resp = await fetch('/chat/stream', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ message: text, session_id: sessionEl.value || 'web-demo' })
+        });
+        const reader = resp.body.getReader();
+        const dec = new TextDecoder();
+        let buf = '';
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buf += dec.decode(value, { stream: true });
+          const parts = buf.split('\n\n');
+          buf = parts.pop();
+          for (const p of parts) {
+            if (!p.startsWith('data:')) continue;
+            const evt = JSON.parse(p.slice(5).trim());
+            if (evt.type === 'token') { answer += evt.text; bot.textContent = answer; }
+            else if (evt.type === 'done') { meta = evt; }
+            chat.scrollTop = chat.scrollHeight;
+          }
+        }
+      } catch (e) {
+        bot.textContent = 'Error de conexión: ' + e;
+      }
+
+      if (meta) renderMeta(bot, meta);
+      send.disabled = false;
+      q.focus();
+    }
+
+    function renderMeta(bot, meta) {
+      const conf = meta.confidence || 'out_of_scope';
+      const map = {high:'b-high', medium:'b-medium', low:'b-low', out_of_scope:'b-out'};
+      let html = esc(bot.textContent);
+      html += `<span class="badge ${map[conf]||'b-out'}">${conf}</span>`;
+      if (meta.sources && meta.sources.length) {
+        html += '<div class="sources">Fuentes: ' +
+          meta.sources.map(s => `<a href="${s.url}" target="_blank">${s.title || s.url}</a>`).join(' · ') +
+          '</div>';
+      }
+      bot.innerHTML = html;
+      const fb = document.createElement('div');
+      fb.className = 'fb';
+      fb.innerHTML = `<button data-r="1">👍</button><button data-r="-1">👎</button>`;
+      fb.querySelectorAll('button').forEach(b => b.onclick = () => {
+        fetch('/feedback', { method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ session_id: sessionEl.value||'web-demo',
+                                 rating: parseInt(b.dataset.r), message_id: meta.message_id }) });
+        fb.innerHTML = '<span class="sources">Gracias por tu feedback.</span>';
+      });
+      bot.appendChild(fb);
+    }
+
+    send.onclick = ask;
+    q.addEventListener('keydown', e => {
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); ask(); }
+    });
+  </script>
+</body>
+</html>
