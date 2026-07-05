@@ -39,10 +39,12 @@ class HtmlCleaner:
             tag.decompose()
 
         for el in soup.find_all(True):
-            ident = " ".join(filter(None, [
-                " ".join(el.get("class", [])),
-                el.get("id", "") or "",
-            ])).lower()
+            # Decomposing a parent above detaches its descendants; those later
+            # list entries have attrs == None — skip them.
+            if el.attrs is None:
+                continue
+            classes = el.get("class") or []
+            ident = " ".join(filter(None, [" ".join(classes), el.get("id") or ""])).lower()
             if any(hint in ident for hint in _NOISE_HINTS):
                 el.decompose()
 

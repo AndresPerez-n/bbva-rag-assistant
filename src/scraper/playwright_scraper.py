@@ -21,6 +21,30 @@ _USER_AGENT = (
     "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
 )
 
+# BBVA's site is behind Akamai bot management, which returns HTTP 403 to a naked
+# headless browser. Sending realistic client-hint headers and spoofing the
+# automation fingerprints below makes the request look like an ordinary Chrome
+# session, which the WAF accepts.
+_EXTRA_HEADERS = {
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+    "Accept-Language": "es-CO,es;q=0.9,en;q=0.8",
+    "sec-ch-ua": '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
+    "sec-ch-ua-mobile": "?0",
+    "sec-ch-ua-platform": '"Windows"',
+    "Upgrade-Insecure-Requests": "1",
+    "Sec-Fetch-Dest": "document",
+    "Sec-Fetch-Mode": "navigate",
+    "Sec-Fetch-Site": "none",
+    "Sec-Fetch-User": "?1",
+}
+
+_STEALTH_JS = (
+    "Object.defineProperty(navigator,'webdriver',{get:()=>undefined});"
+    "Object.defineProperty(navigator,'languages',{get:()=>['es-CO','es']});"
+    "Object.defineProperty(navigator,'plugins',{get:()=>[1,2,3]});"
+    "window.chrome={runtime:{}};"
+)
+
 
 class PlaywrightScraper(BaseScraper):
     """Fetch pages with a headless Chromium so JS-rendered content is captured."""
@@ -39,13 +63,20 @@ class PlaywrightScraper(BaseScraper):
         self._pw = sync_playwright().start()
         self._browser = self._pw.chromium.launch(
             headless=True,
-            args=["--no-sandbox", "--disable-blink-features=AutomationControlled"],
+            args=[
+                "--no-sandbox",
+                "--disable-blink-features=AutomationControlled",
+                "--disable-dev-shm-usage",
+            ],
         )
         self._context = self._browser.new_context(
             user_agent=_USER_AGENT,
             locale="es-CO",
-            viewport={"width": 1366, "height": 900},
+            timezone_id="America/Bogota",
+            viewport={"width": 1366, "height": 768},
+            extra_http_headers=_EXTRA_HEADERS,
         )
+        self._context.add_init_script(_STEALTH_JS)
         logger.info("Playwright Chromium started")
 
     def teardown(self) -> None:
@@ -62,7 +93,15 @@ class PlaywrightScraper(BaseScraper):
     def fetch(self, url: str) -> Optional[str]:
         page = self._context.new_page()
         try:
-            page.goto(url, wait_until="domcontentloaded", timeout=self.timeout_ms)
+            resp = page.goto(url, wait_until="domcontentloaded", timeout=self.timeout_ms)
+            # If the WAF challenges this request, wait and retry once — a second
+            # hit usually carries the clearance cookie set on the first.
+            if resp is not None and resp.status in (403, 429, 503):
+                page.wait_for_timeout(2000)
+                resp = page.goto(url, wait_until="domcontentloaded", timeout=self.timeout_ms)
+                if resp is not None and resp.status >= 400:
+                    logger.warning("skipping %s (status %s)", url, resp.status)
+                    return None
             try:
                 page.wait_for_load_state("networkidle", timeout=self.timeout_ms)
             except Exception:  # noqa: BLE001 — networkidle can time out on chatty pages
