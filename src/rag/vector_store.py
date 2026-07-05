@@ -62,6 +62,11 @@ class VectorStore(ABC):
     def count(self) -> int:
         ...
 
+    @abstractmethod
+    def fetch_all(self) -> List[VectorRecord]:
+        """Return every stored record with its vector (used to build the FAISS cross-check)."""
+        ...
+
 
 class QdrantVectorStore(VectorStore):
     """Repository implementation backed by a Qdrant service."""
@@ -122,6 +127,25 @@ class QdrantVectorStore(VectorStore):
             return self._client.count(self.collection, exact=True).count
         except Exception:  # noqa: BLE001 — collection may not exist yet
             return 0
+
+    def fetch_all(self) -> List[VectorRecord]:
+        records: List[VectorRecord] = []
+        offset = None
+        while True:
+            points, offset = self._client.scroll(
+                collection_name=self.collection,
+                limit=256,
+                offset=offset,
+                with_payload=True,
+                with_vectors=True,
+            )
+            for p in points:
+                payload = dict(p.payload or {})
+                text = payload.pop("text", "")
+                records.append(VectorRecord(text=text, vector=list(p.vector), metadata=payload))
+            if offset is None:
+                break
+        return records
 
 
 def create_vector_store(settings: Settings | None = None) -> VectorStore:
