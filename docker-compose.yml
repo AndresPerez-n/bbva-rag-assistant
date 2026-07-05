@@ -1,0 +1,30 @@
+# Brings up the whole system with one command: `docker compose up`.
+#   - qdrant : the vector database service (persisted volume)
+#   - app    : FastAPI + chat UI (also used to run scrape/ingest one-offs)
+services:
+  qdrant:
+    image: qdrant/qdrant:v1.12.1
+    ports:
+      - "6333:6333"   # REST/gRPC + web dashboard at http://localhost:6333/dashboard
+    volumes:
+      - qdrant_storage:/qdrant/storage
+
+  app:
+    build: .
+    env_file: .env
+    environment:
+      # Inside the compose network the vector DB is reachable by service name.
+      QDRANT_URL: http://qdrant:6333
+    depends_on:
+      - qdrant
+    ports:
+      - "8000:8000"
+    volumes:
+      # Persist scraped data (raw/clean), the history DB, and the model cache
+      # on the host so they survive container restarts.
+      - ./data:/app/data
+      - hf_cache:/app/.cache/hf
+
+volumes:
+  qdrant_storage:
+  hf_cache:
