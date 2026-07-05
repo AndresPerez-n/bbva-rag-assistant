@@ -3,145 +3,171 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>BBVA RAG Assistant</title>
+  <title>BBVA · Asistente RAG</title>
   <style>
-    :root { --bg:#0b1220; --panel:#111a2b; --muted:#8aa0c0; --line:#22314d;
-            --accent:#0a8ee6; --user:#1c4e80; --bot:#16233b; --text:#e7eefc; }
-    * { box-sizing: border-box; }
-    body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-           background: var(--bg); color: var(--text); height:100vh; display:flex; flex-direction:column; }
-    header { padding:14px 18px; border-bottom:1px solid var(--line); display:flex;
-             align-items:center; gap:12px; background:var(--panel); }
-    header h1 { font-size:15px; margin:0; font-weight:600; letter-spacing:.2px; }
-    header .meta { font-size:12px; color:var(--muted); margin-left:auto; }
-    header input { background:var(--bg); border:1px solid var(--line); color:var(--text);
-                   border-radius:6px; padding:5px 8px; font-size:12px; width:150px; }
-    #chat { flex:1; overflow-y:auto; padding:18px; display:flex; flex-direction:column; gap:14px; }
-    .msg { max-width:760px; padding:12px 14px; border-radius:10px; line-height:1.5; white-space:pre-wrap; }
-    .user { align-self:flex-end; background:var(--user); }
-    .bot { align-self:flex-start; background:var(--bot); border:1px solid var(--line); }
-    .sources { margin-top:8px; font-size:12px; color:var(--muted); }
-    .sources a { color:#7fc2f5; text-decoration:none; }
-    .badge { display:inline-block; font-size:11px; padding:1px 7px; border-radius:20px;
-             margin-left:6px; border:1px solid var(--line); }
-    .b-high{color:#65e2a0;} .b-medium{color:#e6c34a;} .b-low{color:#e6884a;} .b-out{color:#e0607a;}
-    .fb { margin-top:8px; display:flex; gap:8px; }
-    .fb button { background:transparent; border:1px solid var(--line); color:var(--muted);
-                 border-radius:6px; cursor:pointer; padding:2px 9px; font-size:13px; }
-    .fb button:hover { color:var(--text); border-color:var(--accent); }
-    footer { padding:14px 18px; border-top:1px solid var(--line); background:var(--panel);
-             display:flex; gap:10px; }
-    #q { flex:1; background:var(--bg); border:1px solid var(--line); color:var(--text);
-         border-radius:8px; padding:11px 12px; font-size:14px; resize:none; }
-    #send { background:var(--accent); color:#fff; border:none; border-radius:8px;
-            padding:0 20px; font-size:14px; cursor:pointer; }
-    #send:disabled { opacity:.5; cursor:default; }
+    :root{
+      --navy:#072146; --blue:#1464A5; --blue-d:#004481; --aqua:#2DCCCD;
+      --yellow:#F8CD51; --bg:#eef2f6; --panel:#ffffff; --line:#dfe6ee;
+      --text:#121a2b; --muted:#5b6b80; --ok:#0f9d58; --warn:#d68a1e;
+    }
+    *{box-sizing:border-box;}
+    body{margin:0;font-family:"Segoe UI",system-ui,-apple-system,Roboto,sans-serif;
+         background:var(--bg);color:var(--text);height:100vh;display:flex;flex-direction:column;}
+    header{background:var(--navy);color:#fff;padding:0 20px;height:60px;display:flex;
+           align-items:center;gap:14px;box-shadow:0 2px 8px rgba(7,33,70,.25);}
+    .logo{font-weight:800;font-size:22px;letter-spacing:3px;background:#fff;color:var(--navy);
+          padding:3px 10px;border-radius:3px;}
+    header h1{font-size:15px;font-weight:500;margin:0;opacity:.95;}
+    header .sess{margin-left:auto;font-size:12px;color:#bcd0e6;display:flex;align-items:center;gap:6px;}
+    header input{background:#0d2f5c;border:1px solid #24507f;color:#fff;border-radius:6px;
+                 padding:6px 9px;font-size:12px;width:150px;}
+    #chat{flex:1;overflow-y:auto;padding:22px;display:flex;flex-direction:column;gap:16px;
+          max-width:900px;width:100%;margin:0 auto;}
+    .row{display:flex;flex-direction:column;gap:6px;max-width:88%;}
+    .row.u{align-self:flex-end;align-items:flex-end;}
+    .row.b{align-self:flex-start;align-items:flex-start;width:88%;}
+    .bubble{padding:12px 15px;border-radius:12px;line-height:1.55;white-space:pre-wrap;font-size:14.5px;}
+    .u .bubble{background:var(--blue);color:#fff;border-bottom-right-radius:3px;}
+    .b .bubble{background:var(--panel);border:1px solid var(--line);border-bottom-left-radius:3px;
+               box-shadow:0 1px 3px rgba(7,33,70,.06);width:100%;}
+    .badge{display:inline-block;font-size:11px;font-weight:600;padding:2px 9px;border-radius:20px;
+           border:1px solid var(--line);}
+    .b-high{color:#0f9d58;border-color:#bfe6cf;background:#f0faf4;}
+    .b-medium{color:#c98a00;border-color:#f0e0b0;background:#fdf7e6;}
+    .b-low{color:#d1631a;border-color:#f2d6bf;background:#fdf1e8;}
+    .b-out{color:#c0324a;border-color:#f0c6cf;background:#fceef1;}
+    /* retrieval panel */
+    .panel{border:1px solid var(--line);border-radius:10px;background:#fafcfe;font-size:12.5px;
+           width:100%;overflow:hidden;}
+    .panel>summary{cursor:pointer;padding:9px 12px;font-weight:600;color:var(--navy);
+                   list-style:none;display:flex;align-items:center;gap:8px;}
+    .panel>summary::-webkit-details-marker{display:none;}
+    .panel .body{padding:4px 12px 12px;display:flex;flex-direction:column;gap:9px;}
+    .xcheck{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 10px;border-radius:8px;}
+    .xcheck.ok{background:#eafaf1;border:1px solid #bfe6cf;}
+    .xcheck.diff{background:#fdf7e6;border:1px solid #f0e0b0;}
+    .xtag{font-weight:700;}
+    .xtag.ok{color:var(--ok);} .xtag.diff{color:var(--warn);}
+    .src{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:7px 0;border-top:1px dashed var(--line);}
+    .src a{color:var(--blue-d);text-decoration:none;font-weight:600;flex:1;min-width:220px;}
+    .src a:hover{text-decoration:underline;}
+    .chip{font-size:11px;font-weight:700;padding:2px 8px;border-radius:6px;white-space:nowrap;}
+    .chip.cos{background:#e9f1fb;color:var(--blue-d);}
+    .chip.rr{background:#e7faf9;color:#0a8f90;}
+    .fb{display:flex;gap:8px;margin-top:2px;}
+    .fb button{background:#fff;border:1px solid var(--line);color:var(--muted);border-radius:7px;
+               cursor:pointer;padding:3px 11px;font-size:13px;}
+    .fb button:hover{border-color:var(--blue);color:var(--blue);}
+    footer{background:var(--panel);border-top:1px solid var(--line);padding:14px 20px;}
+    .composer{max-width:900px;margin:0 auto;display:flex;gap:10px;}
+    #q{flex:1;background:#fff;border:1px solid var(--line);color:var(--text);border-radius:10px;
+       padding:12px 14px;font-size:14.5px;resize:none;outline:none;}
+    #q:focus{border-color:var(--blue);}
+    #send{background:var(--blue);color:#fff;border:none;border-radius:10px;padding:0 22px;
+          font-size:14px;font-weight:600;cursor:pointer;}
+    #send:hover{background:var(--blue-d);} #send:disabled{opacity:.5;cursor:default;}
+    .hint{max-width:900px;margin:6px auto 0;font-size:11px;color:var(--muted);}
   </style>
 </head>
 <body>
   <header>
-    <h1>BBVA RAG Assistant</h1>
-    <span class="meta">
-      sesión: <input id="session" value="web-demo" />
-    </span>
+    <span class="logo">BBVA</span>
+    <h1>Asistente RAG · consulta el sitio del banco</h1>
+    <span class="sess">sesión <input id="session" value="demo" /></span>
   </header>
 
   <div id="chat">
-    <div class="msg bot">Hola. Puedo responder preguntas sobre el contenido del sitio del banco.
-¿En qué te ayudo?</div>
+    <div class="row b"><div class="bubble">Hola 👋 Puedo responder preguntas sobre el contenido publicado en el sitio del banco. Cada respuesta muestra sus <b>fuentes</b>, los <b>scores de recuperación</b> y una <b>confirmación con FAISS</b>. ¿En qué te ayudo?</div></div>
   </div>
 
   <footer>
-    <textarea id="q" rows="1" placeholder="Escribe tu pregunta y pulsa Enter..."></textarea>
-    <button id="send">Enviar</button>
+    <div class="composer">
+      <textarea id="q" rows="1" placeholder="Escribe tu pregunta y pulsa Enter…"></textarea>
+      <button id="send">Enviar</button>
+    </div>
+    <div class="hint">Ej.: “¿Qué beneficios tiene la tarjeta de crédito?” · “¿Qué créditos de vivienda ofrecen?”</div>
   </footer>
 
   <script>
-    const chat = document.getElementById('chat');
-    const q = document.getElementById('q');
-    const send = document.getElementById('send');
-    const sessionEl = document.getElementById('session');
+    const chat=document.getElementById('chat'), q=document.getElementById('q'),
+          send=document.getElementById('send'), sessionEl=document.getElementById('session');
+    const CONF={high:['b-high','alta'],medium:['b-medium','media'],low:['b-low','baja'],out_of_scope:['b-out','fuera de alcance']};
+    const esc=s=>s.replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+    function add(cls){const d=document.createElement('div');d.className='row '+cls;chat.appendChild(d);chat.scrollTop=chat.scrollHeight;return d;}
 
-    function el(cls, html) {
-      const d = document.createElement('div');
-      d.className = cls;
-      if (html !== undefined) d.innerHTML = html;
-      chat.appendChild(d);
-      chat.scrollTop = chat.scrollHeight;
-      return d;
-    }
-    function esc(s){ return s.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
+    async function ask(){
+      const text=q.value.trim(); if(!text) return;
+      q.value=''; send.disabled=true;
+      const u=add('u'); u.innerHTML='<div class="bubble">'+esc(text)+'</div>';
+      const b=add('b');
+      const bubble=document.createElement('div'); bubble.className='bubble'; bubble.textContent='…';
+      b.appendChild(bubble);
+      let answer='', meta=null, panelRendered=false;
 
-    async function ask() {
-      const text = q.value.trim();
-      if (!text) return;
-      q.value = '';
-      send.disabled = true;
-      el('msg user', esc(text));
-
-      const bot = el('msg bot', '');
-      let answer = '';
-      let meta = null;
-
-      try {
-        const resp = await fetch('/chat/stream', {
-          method: 'POST',
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({ message: text, session_id: sessionEl.value || 'web-demo' })
-        });
-        const reader = resp.body.getReader();
-        const dec = new TextDecoder();
-        let buf = '';
-        while (true) {
-          const { value, done } = await reader.read();
-          if (done) break;
-          buf += dec.decode(value, { stream: true });
-          const parts = buf.split('\n\n');
-          buf = parts.pop();
-          for (const p of parts) {
-            if (!p.startsWith('data:')) continue;
-            const evt = JSON.parse(p.slice(5).trim());
-            if (evt.type === 'token') { answer += evt.text; bot.textContent = answer; }
-            else if (evt.type === 'done') { meta = evt; }
-            chat.scrollTop = chat.scrollHeight;
+      try{
+        const resp=await fetch('/chat/stream',{method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({message:text,session_id:sessionEl.value||'demo'})});
+        const reader=resp.body.getReader(); const dec=new TextDecoder(); let buf='';
+        while(true){
+          const {value,done}=await reader.read(); if(done) break;
+          buf+=dec.decode(value,{stream:true}); const parts=buf.split('\n\n'); buf=parts.pop();
+          for(const p of parts){
+            if(!p.startsWith('data:')) continue;
+            const evt=JSON.parse(p.slice(5).trim());
+            if(evt.type==='sources'){ meta=evt; if(!panelRendered){renderPanel(b,evt);panelRendered=true;} }
+            else if(evt.type==='token'){ if(answer===''){bubble.textContent='';} answer+=evt.text; bubble.textContent=answer; }
+            else if(evt.type==='done'){ meta=Object.assign(meta||{},evt); }
+            chat.scrollTop=chat.scrollHeight;
           }
         }
-      } catch (e) {
-        bot.textContent = 'Error de conexión: ' + e;
-      }
-
-      if (meta) renderMeta(bot, meta);
-      send.disabled = false;
-      q.focus();
+      }catch(e){ bubble.textContent='Error de conexión: '+e; }
+      if(meta) finalize(b,bubble,meta);
+      send.disabled=false; q.focus();
     }
 
-    function renderMeta(bot, meta) {
-      const conf = meta.confidence || 'out_of_scope';
-      const map = {high:'b-high', medium:'b-medium', low:'b-low', out_of_scope:'b-out'};
-      let html = esc(bot.textContent);
-      html += `<span class="badge ${map[conf]||'b-out'}">${conf}</span>`;
-      if (meta.sources && meta.sources.length) {
-        html += '<div class="sources">Fuentes: ' +
-          meta.sources.map(s => `<a href="${s.url}" target="_blank">${s.title || s.url}</a>`).join(' · ') +
-          '</div>';
+    function scoreChips(s){
+      let h='<span class="chip cos" title="Similitud coseno (Qdrant)">cos '+(s.score!=null?s.score.toFixed(3):'–')+'</span>';
+      if(s.rerank_score!=null) h+='<span class="chip rr" title="Score del reranker (cross-encoder)">rerank '+s.rerank_score.toFixed(2)+'</span>';
+      return h;
+    }
+    function host(u){ try{return new URL(u).pathname;}catch(e){return u;} }
+
+    function renderPanel(b,evt){
+      const sources=evt.sources||[], cc=evt.crosscheck;
+      if(!sources.length && !cc) return;
+      const panel=document.createElement('details'); panel.className='panel'; panel.open=true;
+      let inner='<summary>🔎 Recuperación · '+sources.length+' fuentes</summary><div class="body">';
+      if(cc){
+        const ok=cc.agree; const qt=cc.qdrant_top, ft=cc.faiss_top;
+        inner+='<div class="xcheck '+(ok?'ok':'diff')+'">'+
+          '<span class="xtag '+(ok?'ok':'diff')+'">'+(ok?'✓ FAISS confirma el top‑1 de Qdrant':'≠ FAISS difiere de Qdrant')+'</span>'+
+          (qt?'<span class="chip cos">Qdrant '+qt.score.toFixed(3)+'</span>':'')+
+          (ft?'<span class="chip rr">FAISS '+ft.score.toFixed(3)+'</span>':'')+
+          '<span style="color:var(--muted)">· '+(cc.faiss_indexed||0)+' vectores</span></div>';
       }
-      bot.innerHTML = html;
-      const fb = document.createElement('div');
-      fb.className = 'fb';
-      fb.innerHTML = `<button data-r="1">👍</button><button data-r="-1">👎</button>`;
-      fb.querySelectorAll('button').forEach(b => b.onclick = () => {
-        fetch('/feedback', { method:'POST', headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({ session_id: sessionEl.value||'web-demo',
-                                 rating: parseInt(b.dataset.r), message_id: meta.message_id }) });
-        fb.innerHTML = '<span class="sources">Gracias por tu feedback.</span>';
+      for(const s of sources){
+        inner+='<div class="src"><a href="'+s.url+'" target="_blank">'+esc(s.title||host(s.url))+'</a>'+scoreChips(s)+'</div>';
+      }
+      inner+='</div>'; panel.innerHTML=inner; b.appendChild(panel);
+    }
+
+    function finalize(b,bubble,meta){
+      const conf=meta.confidence||'out_of_scope'; const c=CONF[conf]||CONF.out_of_scope;
+      const badge=document.createElement('div');
+      badge.innerHTML='<span class="badge '+c[0]+'">confianza: '+c[1]+'</span>';
+      b.insertBefore(badge,b.children[1]||null);
+      const fb=document.createElement('div'); fb.className='fb';
+      fb.innerHTML='<button data-r="1">👍 Útil</button><button data-r="-1">👎 No útil</button>';
+      fb.querySelectorAll('button').forEach(btn=>btn.onclick=()=>{
+        fetch('/feedback',{method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({session_id:sessionEl.value||'demo',rating:parseInt(btn.dataset.r),message_id:meta.message_id})});
+        fb.innerHTML='<span style="color:var(--muted);font-size:12px">Gracias por tu feedback.</span>';
       });
-      bot.appendChild(fb);
+      b.appendChild(fb);
     }
 
-    send.onclick = ask;
-    q.addEventListener('keydown', e => {
-      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); ask(); }
-    });
+    send.onclick=ask;
+    q.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();ask();}});
   </script>
 </body>
 </html>

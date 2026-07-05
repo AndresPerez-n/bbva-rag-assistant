@@ -71,6 +71,10 @@ class Settings:
     top_k_final: int = field(default_factory=lambda: _get_int("TOP_K_FINAL", 6))
     similarity_threshold: float = field(default_factory=lambda: _get_float("SIMILARITY_THRESHOLD", 0.35))
 
+    # FAISS retrieval cross-check: build an in-process FAISS index from Qdrant's
+    # vectors and confirm, per query, that it agrees with Qdrant's top hit.
+    faiss_crosscheck_enabled: bool = field(default_factory=lambda: _get_bool("FAISS_CROSSCHECK", True))
+
     # Reranker
     reranker_enabled: bool = field(default_factory=lambda: _get_bool("RERANKER_ENABLED", True))
     reranker_model: str = field(

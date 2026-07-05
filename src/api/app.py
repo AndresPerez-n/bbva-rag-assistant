@@ -20,7 +20,7 @@ import json
 import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, StreamingResponse
@@ -44,6 +44,50 @@ class FeedbackRequest(BaseModel):
     session_id: str
     rating: int = Field(..., description="1 for thumbs up, -1 for thumbs down")
     message_id: Optional[int] = None
+
+
+# --- Response models (typed output, auto-documented in Swagger) -------------
+class SourceModel(BaseModel):
+    url: str
+    title: str
+    score: float                       # Qdrant cosine similarity
+    rerank_score: Optional[float] = None  # cross-encoder relevance
+
+
+class CrossHit(BaseModel):
+    url: Optional[str] = None
+    score: Optional[float] = None
+
+
+class CrossCheckModel(BaseModel):
+    faiss_indexed: int
+    qdrant_top: Optional[CrossHit] = None
+    faiss_top: Optional[CrossHit] = None
+    agree: bool
+
+
+class ChatResponse(BaseModel):
+    answer: str
+    confidence: str
+    out_of_scope: bool
+    sources: List[SourceModel]
+    crosscheck: Optional[CrossCheckModel] = None
+    latency_ms: int
+    message_id: Optional[int] = None
+
+
+class HealthResponse(BaseModel):
+    status: str
+    model: str
+    provider: str
+    collection: str
+    indexed_chunks: int
+    faiss_crosscheck_vectors: int
+    conversation_window: int
+
+
+class FeedbackResponse(BaseModel):
+    status: str
 
 
 class _State:
@@ -74,15 +118,19 @@ def index():
     index_file = _STATIC_DIR / "index.html"
     if not index_file.exists():
         return {"message": "Chat UI not found. POST /chat or /chat/stream instead."}
-    return FileResponse(index_file)
+    # no-cache so UI updates are always picked up (avoids stale cached page)
+    return FileResponse(index_file, headers={"Cache-Control": "no-cache, max-age=0"})
 
 
-@app.get("/health")
+@app.get("/health", response_model=HealthResponse)
 def health():
     settings = get_settings()
     indexed = 0
+    faiss_indexed = 0
     try:
         indexed = state.chatbot.retriever.store.count() if state.chatbot else 0
+        cc = state.chatbot.retriever.faiss_crosscheck if state.chatbot else None
+        faiss_indexed = cc.size if cc else 0
     except Exception:  # noqa: BLE001
         pass
     return {
@@ -91,11 +139,12 @@ def health():
         "provider": settings.llm_provider,
         "collection": settings.qdrant_collection,
         "indexed_chunks": indexed,
+        "faiss_crosscheck_vectors": faiss_indexed,
         "conversation_window": settings.conversation_window,
     }
 
 
-@app.post("/chat")
+@app.post("/chat", response_model=ChatResponse)
 def chat(req: ChatRequest):
     if state.chatbot is None:
         raise HTTPException(503, "Chatbot not ready")
@@ -105,6 +154,7 @@ def chat(req: ChatRequest):
         "confidence": answer.confidence,
         "out_of_scope": answer.out_of_scope,
         "sources": [s.__dict__ for s in answer.sources],
+        "crosscheck": answer.crosscheck,
         "latency_ms": answer.latency_ms,
         "message_id": answer.message_id,
     }
@@ -124,6 +174,7 @@ def chat_stream(req: ChatRequest):
                     "confidence": ans.confidence,
                     "out_of_scope": ans.out_of_scope,
                     "sources": [s.__dict__ for s in ans.sources],
+                    "crosscheck": ans.crosscheck,
                     "message_id": ans.message_id,
                     "latency_ms": ans.latency_ms,
                 }
@@ -134,7 +185,7 @@ def chat_stream(req: ChatRequest):
     return StreamingResponse(event_gen(), media_type="text/event-stream")
 
 
-@app.post("/feedback")
+@app.post("/feedback", response_model=FeedbackResponse)
 def feedback(req: FeedbackRequest):
     if state.store is None:
         raise HTTPException(503, "Store not ready")

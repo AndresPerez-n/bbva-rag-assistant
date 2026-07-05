@@ -7,8 +7,14 @@ questions about the content published on a bank's website
 The system **scrapes** the site, **stores** the raw and clean data locally,
 **vectorizes and indexes** it in a vector database, and exposes a **conversational
 interface** (web + CLI) that answers grounded in the scraped content, with source
-citations, per-session persisted history (last *N* messages, configurable), and a
+citations, **per-source retrieval scores**, an independent **FAISS cross-check** of
+the top hit, per-session persisted history (last *N* messages, configurable), and a
 **conversation-analytics** report.
+
+### Documentation
+- [Architecture & design decisions](docs/ARCHITECTURE.md) — system diagram + technology-selection rationale
+- [Cost model](docs/COSTS.md) — what the current solution costs to run
+- [Databases (DBeaver / Qdrant dashboard)](docs/DATABASES.md) — how to inspect the stores visually
 
 ---
 
@@ -117,8 +123,15 @@ and cache volumes).
 
 ### Web interface
 
-Open <http://localhost:8000>. Type a question; the answer streams token-by-token,
-shows a **confidence badge**, lists **source links**, and offers **👍 / 👎 feedback**.
+Open <http://localhost:8000> (BBVA-themed). Type a question; the answer streams
+token-by-token and shows:
+- a **confidence badge**,
+- a **🔎 retrieval panel** — each source with its **Qdrant cosine** score and
+  **cross-encoder rerank** score,
+- a **FAISS cross-check** badge confirming whether an independent FAISS search
+  agrees with Qdrant's top passage,
+- **👍 / 👎 feedback**.
+
 Change the **session id** field (top-right) to keep separate conversation
 histories — the assistant remembers the last *N* messages of the active session.
 
@@ -199,6 +212,7 @@ three):
 | **Scraping** | Playwright (headless Chromium) + BeautifulSoup | BBVA's site is client-rendered behind bot protection; a plain HTTP GET returns an empty shell, so a real browser is needed. BeautifulSoup handles clean-text extraction. A stdlib HTTP fallback is included. |
 | **Embeddings** | `sentence-transformers/all-MiniLM-L6-v2` (local) | Free, runs on CPU, no API cost; 384-dim vectors, normalized so cosine = dot product. Preferred (per the brief) over paid embedding APIs. |
 | **Vector DB** | **Qdrant** (self-hosted service) | A real, production-grade vector database that runs as its own container (fits "bring up the vector DB with one command"), free/self-hosted, with native cosine search and metadata payloads for citations and future access filters. |
+| **Retrieval cross-check** | **FAISS** (in-memory) | Built at startup from the same Qdrant vectors; per query it independently confirms Qdrant's top hit (agreement shown in the UI) — a lightweight retrieval-consistency signal. Config: `FAISS_CROSSCHECK`. |
 | **Reranker** | `cross-encoder/ms-marco-MiniLM-L-6-v2` (local) | Bonus. A cross-encoder re-scores (query, chunk) pairs jointly — far more precise than first-stage bi-encoder similarity — and is free/local. |
 | **LLM** | **GPT (OpenAI)**, model-swappable | Strong grounded-answer quality and instruction-following for a citation-strict assistant. Externalized via `LLM_PROVIDER` / `LLM_MODEL`; Claude (Anthropic) is supported as an alternative through the same factory. |
 | **Backend** | FastAPI + Uvicorn | Async, automatic OpenAPI docs, Pydantic validation, native streaming (SSE). |
