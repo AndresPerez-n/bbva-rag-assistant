@@ -50,7 +50,7 @@ citations, per-session persisted history (last *N* messages, configurable), and 
                                  │  ▲                              │
                        history   │  │ last N msgs                  ▼
                                  ▼  │                       ┌────────────┐
-                          ┌──────────────┐                  │ LLM (Claude)│
+                          ┌──────────────┐                  │ LLM (OpenAI)│
                           │  SQLite      │                  └────────────┘
                           │ (history +   │
                           │  feedback)   │ ──► Analytics (metrics over history)
@@ -65,14 +65,14 @@ retrieve → rerank → generate (grounded, cited) → persist history → analy
 ## Prerequisites
 
 - **Docker** and **Docker Compose** (v2). Nothing else is required to run the system.
-- An **Anthropic API key** (Claude is the default generation model). The rest of
+- An **OpenAI API key** (GPT is the default generation model). The rest of
   the stack — embeddings, reranker, vector DB — is free / self-hosted.
-  - You can switch to OpenAI by setting `LLM_PROVIDER=openai` and `OPENAI_API_KEY`.
+  - You can switch to Claude by setting `LLM_PROVIDER=anthropic` and `ANTHROPIC_API_KEY`.
 - Outbound internet access from the containers (to reach the bank site, the
-  Anthropic API, and to download the local embedding/reranker models on first run).
+  LLM API, and to download the local embedding/reranker models on first run).
 
 Environment variables are documented in [`.env.example`](.env.example). The only
-one you *must* set is `ANTHROPIC_API_KEY`.
+one you *must* set is `OPENAI_API_KEY`.
 
 ---
 
@@ -87,7 +87,7 @@ cd bbva-rag-assistant
 
 # 2. Configure environment
 cp .env.example .env
-#   then edit .env and set ANTHROPIC_API_KEY=sk-ant-...
+#   then edit .env and set OPENAI_API_KEY=sk-...
 
 # 3. Build and start all services (app + Qdrant)
 docker compose up -d --build
@@ -200,7 +200,7 @@ three):
 | **Embeddings** | `sentence-transformers/all-MiniLM-L6-v2` (local) | Free, runs on CPU, no API cost; 384-dim vectors, normalized so cosine = dot product. Preferred (per the brief) over paid embedding APIs. |
 | **Vector DB** | **Qdrant** (self-hosted service) | A real, production-grade vector database that runs as its own container (fits "bring up the vector DB with one command"), free/self-hosted, with native cosine search and metadata payloads for citations and future access filters. |
 | **Reranker** | `cross-encoder/ms-marco-MiniLM-L-6-v2` (local) | Bonus. A cross-encoder re-scores (query, chunk) pairs jointly — far more precise than first-stage bi-encoder similarity — and is free/local. |
-| **LLM** | **Claude (Anthropic)**, model-swappable | Strong grounded-answer quality and instruction-following for a citation-strict assistant. Externalized via `LLM_PROVIDER` / `LLM_MODEL`; OpenAI is supported as an alternative. |
+| **LLM** | **GPT (OpenAI)**, model-swappable | Strong grounded-answer quality and instruction-following for a citation-strict assistant. Externalized via `LLM_PROVIDER` / `LLM_MODEL`; Claude (Anthropic) is supported as an alternative through the same factory. |
 | **Backend** | FastAPI + Uvicorn | Async, automatic OpenAPI docs, Pydantic validation, native streaming (SSE). |
 | **History** | SQLite (stdlib) | Persists conversation history and feedback keyed by session id with zero extra services; queryable by the analytics module. |
 | **Frontend** | Single-file HTML/JS (no build step) | Minimal, functional, dependency-free; streams tokens over SSE and renders sources + feedback. |
@@ -244,10 +244,19 @@ Honest notes on shortcuts and assumptions:
 - **Assumption — scope of "the site".** The crawler is bounded by
   `SCRAPE_MAX_PAGES` / `SCRAPE_MAX_DEPTH` (defaults 40 / 2) so the demo indexes a
   representative slice of the site, not its entirety. Raise them to index more.
-- **BBVA anti-bot / JS rendering.** BBVA Colombia is heavily client-rendered and
-  may rate-limit or block automated access. Playwright mitigates this but some
-  pages can still return little content; those are skipped. The brief explicitly
-  allows another bank if needed — the target is a single env var (`SCRAPE_START_URL`).
+- **BBVA anti-bot / JS rendering.** BBVA Colombia is client-rendered and sits
+  behind Akamai bot management, which returns HTTP 403 to a naked headless
+  browser. The scraper defeats this with realistic client-hint headers and a
+  small stealth init script (spoofing `navigator.webdriver`/languages/plugins) —
+  verified returning HTTP 200 and full content. This is inherently fragile: if
+  BBVA tightens its WAF the headers may need updating, and the brief explicitly
+  allows another bank (`SCRAPE_START_URL` is a single env var).
+- **Embeddings and Spanish.** The default `all-MiniLM-L6-v2` is English-first, so
+  Spanish similarity scores are compressed (which weakens the similarity-based
+  out-of-scope gate — the grounding prompt is the real safety net and refuses
+  off-topic questions correctly). A **multilingual** embedding model
+  (`paraphrase-multilingual-MiniLM-L12-v2`, see `.env.example`) ranks Spanish
+  content noticeably better and is recommended where the ~470MB download is viable.
 - **Chunking / parsing.** Text-only extraction; tables and PDFs linked from the
   site are not parsed structurally (would need e.g. Unstructured.io).
 - **Confidence bands** are calibrated to the MiniLM cosine-score distribution; a

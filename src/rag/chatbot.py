@@ -142,7 +142,7 @@ class Chatbot:
         window = self.store.get_window(session_id, self.conversation_window + 1)
         prior = window[:-1] if window else []
         msgs = [{"role": m.role, "content": m.content} for m in prior]
-        # Anthropic requires the first message to be from the user.
+        # Chat APIs require the first message to be from the user.
         while msgs and msgs[0]["role"] != "user":
             msgs.pop(0)
         return msgs

@@ -14,8 +14,11 @@ sentence-transformers==3.3.1
 # Vector database (self-hosted service)
 qdrant-client==1.12.1
 
-# LLM providers (Claude default; OpenAI optional via the factory)
+# LLM providers (swappable via LLM_PROVIDER / the LLM factory)
 anthropic==0.39.0
+openai==1.54.4
+# Pin httpx: 0.28 removed the `proxies` arg that openai 1.54 still passes.
+httpx==0.27.2
 
 # API server + streaming
 fastapi==0.115.5

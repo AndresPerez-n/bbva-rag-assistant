@@ -45,13 +45,15 @@ class Settings:
     """Immutable, environment-driven configuration object."""
 
     # LLM
-    llm_provider: str = field(default_factory=lambda: os.getenv("LLM_PROVIDER", "anthropic"))
-    llm_model: str = field(default_factory=lambda: os.getenv("LLM_MODEL", "claude-opus-4-8"))
+    llm_provider: str = field(default_factory=lambda: os.getenv("LLM_PROVIDER", "openai"))
+    llm_model: str = field(default_factory=lambda: os.getenv("LLM_MODEL", "gpt-4o-mini"))
     llm_max_tokens: int = field(default_factory=lambda: _get_int("LLM_MAX_TOKENS", 1024))
     anthropic_api_key: Optional[str] = field(default_factory=lambda: os.getenv("ANTHROPIC_API_KEY"))
     openai_api_key: Optional[str] = field(default_factory=lambda: os.getenv("OPENAI_API_KEY"))
 
-    # Embeddings
+    # Embeddings. Default is the compact, reliable all-MiniLM-L6-v2. For better
+    # Spanish ranking, a multilingual model is recommended (see .env.example) —
+    # set EMBEDDING_MODEL to override; the pipeline is model-agnostic.
     embedding_model: str = field(
         default_factory=lambda: os.getenv("EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
     )
@@ -66,8 +68,8 @@ class Settings:
 
     # Retrieval
     top_k_retrieval: int = field(default_factory=lambda: _get_int("TOP_K_RETRIEVAL", 20))
-    top_k_final: int = field(default_factory=lambda: _get_int("TOP_K_FINAL", 5))
-    similarity_threshold: float = field(default_factory=lambda: _get_float("SIMILARITY_THRESHOLD", 0.25))
+    top_k_final: int = field(default_factory=lambda: _get_int("TOP_K_FINAL", 6))
+    similarity_threshold: float = field(default_factory=lambda: _get_float("SIMILARITY_THRESHOLD", 0.35))
 
     # Reranker
     reranker_enabled: bool = field(default_factory=lambda: _get_bool("RERANKER_ENABLED", True))

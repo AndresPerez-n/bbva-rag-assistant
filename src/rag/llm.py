@@ -2,7 +2,7 @@
 
 Design pattern: **Factory Method**. :class:`LLMFactory` builds the configured
 provider; callers depend only on the abstract :class:`LLMClient` (``generate`` /
-``stream``). Claude (Anthropic) is the default; OpenAI is supported as an
+``stream``). OpenAI (GPT) is the default; Claude (Anthropic) is supported as an
 alternative. Switching providers/models is a configuration change, not a code
 change.
 """
@@ -27,7 +27,7 @@ class LLMClient(ABC):
 
 
 class AnthropicLLM(LLMClient):
-    """Claude via the Anthropic Messages API."""
+    """Claude via the Anthropic Messages API (alternative provider)."""
 
     def __init__(self, api_key: str, model: str, max_tokens: int) -> None:
         import anthropic
@@ -59,7 +59,7 @@ class AnthropicLLM(LLMClient):
 
 
 class OpenAILLM(LLMClient):
-    """OpenAI Chat Completions (optional alternative provider)."""
+    """OpenAI Chat Completions — the default provider (GPT)."""
 
     def __init__(self, api_key: str, model: str, max_tokens: int) -> None:
         try:
@@ -100,7 +100,7 @@ class LLMFactory:
     @staticmethod
     def create(settings: Settings | None = None) -> LLMClient:
         settings = settings or get_settings()
-        provider = (settings.llm_provider or "anthropic").lower()
+        provider = (settings.llm_provider or "openai").lower()
         if provider == "anthropic":
             return AnthropicLLM(settings.anthropic_api_key, settings.llm_model, settings.llm_max_tokens)
         if provider == "openai":
